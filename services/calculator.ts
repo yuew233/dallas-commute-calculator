@@ -1,10 +1,11 @@
 import { Inputs, ComparisonResult, CostBreakdown } from '../types';
-import { WEEKS_PER_YEAR } from '../constants';
+import { WEEKS_PER_YEAR, MONTH_NAMES } from '../constants';
 
 export const calculateCosts = (inputs: Inputs): ComparisonResult => {
   const {
     daysInOffice,
     oneWayDistance,
+    startMonth,
     ptoDays,
     holidays,
     sickDays,
@@ -14,19 +15,23 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
     tollsPerDay,
     maintenancePerMile,
     annualPassPrice,
+    dailyTicketPrice,
     usePreTaxBenefit,
     taxRate,
     hybridDriveDays
   } = inputs;
 
-  // 1. Calculate Total Commuting Days per Year
-  // Total potential work days
-  const totalWorkDaysAvailable = (WEEKS_PER_YEAR * 5) - holidays - ptoDays - sickDays;
+  // 0. Determine Time Period Scaling
+  const monthsRemaining = 13 - startMonth;
+  const periodRatio = monthsRemaining / 12;
+  const periodLabel = `${MONTH_NAMES[startMonth - 1]} - Dec (${monthsRemaining} months)`;
+
+  // 1. Calculate Total Commuting Days for the Period
+  const totalAnnualWorkDays = (WEEKS_PER_YEAR * 5) - holidays - ptoDays - sickDays;
+  const periodWorkDaysAvailable = totalAnnualWorkDays * periodRatio;
   
-  // Actual days traveling to office (adjusted for user's weekly schedule)
-  // Ratio of days in office vs 5 day work week
   const attendanceRatio = daysInOffice / 5;
-  const actualCommuteDays = Math.round(totalWorkDaysAvailable * attendanceRatio);
+  const actualCommuteDays = Math.round(periodWorkDaysAvailable * attendanceRatio);
 
   // Helper to calculate Driving Cost for N days
   const calculateDrivingCost = (daysDriving: number, includeFixedParking: boolean): CostBreakdown => {
@@ -36,10 +41,7 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
     const tollCost = daysDriving * tollsPerDay;
     const maintenanceCost = totalMiles * maintenancePerMile;
     
-    // Parking: If you pay monthly, you pay it regardless of usage usually, unless specified otherwise.
-    // For the sake of this calculator, we assume the $50/mo is a sunk cost if you plan to drive regularly.
-    // However, if daysDriving is 0, we assume you cancel the spot.
-    const parkingCost = includeFixedParking ? (monthlyParking * 12) : 0;
+    const parkingCost = includeFixedParking ? (monthlyParking * monthsRemaining) : 0;
 
     return {
       totalCost: fuelCost + tollCost + maintenanceCost + parkingCost,
@@ -49,16 +51,18 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
         tolls: tollCost,
         maintenance: maintenanceCost,
         passCost: 0,
+        ticketCost: 0,
         taxSavings: 0
       },
       commuteDays: daysDriving
     };
   };
 
-  // Helper to calculate DART Cost
-  const calculateDartCost = (): CostBreakdown => {
-    const taxSavings = usePreTaxBenefit ? (annualPassPrice * (taxRate / 100)) : 0;
-    const netPassCost = annualPassPrice - taxSavings;
+  // Helper to calculate Annual Pass Cost
+  const calculateAnnualPassCost = (): CostBreakdown => {
+    const proratedPassPrice = annualPassPrice * periodRatio;
+    const taxSavings = usePreTaxBenefit ? (proratedPassPrice * (taxRate / 100)) : 0;
+    const netPassCost = proratedPassPrice - taxSavings;
 
     return {
       totalCost: netPassCost,
@@ -67,37 +71,61 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
         parking: 0,
         tolls: 0,
         maintenance: 0,
-        passCost: annualPassPrice,
+        passCost: proratedPassPrice,
+        ticketCost: 0,
         taxSavings: taxSavings
       },
-      commuteDays: actualCommuteDays // In DART only mode, you ride every day you go to work
+      commuteDays: actualCommuteDays
     };
   };
+
+  // Helper to calculate Prepaid Daily Ticket Cost
+  const calculatePrepaidDailyCost = (daysRiding: number): CostBreakdown => {
+    const totalTicketCost = daysRiding * dailyTicketPrice;
+    // Assume prepaid load is also pre-tax
+    const taxSavings = usePreTaxBenefit ? (totalTicketCost * (taxRate / 100)) : 0;
+    const netCost = totalTicketCost - taxSavings;
+
+    return {
+      totalCost: netCost,
+      breakdown: {
+        fuel: 0,
+        parking: 0,
+        tolls: 0,
+        maintenance: 0,
+        passCost: 0,
+        ticketCost: totalTicketCost,
+        taxSavings: taxSavings
+      },
+      commuteDays: daysRiding
+    };
+  }
 
   // Scenario 1: Drive Every Day
   const drivingOnly = calculateDrivingCost(actualCommuteDays, true);
 
-  // Scenario 2: DART Every Day
-  const dartOnly = calculateDartCost();
+  // Scenario 2: DART Annual Pass
+  const dartOnly = calculateAnnualPassCost();
 
-  // Scenario 3: Hybrid
-  // How many days driving vs DART annually?
-  // hybridDriveDays is "Days driving per week".
-  const hybridDriveRatio = hybridDriveDays / daysInOffice; // e.g. 2 days drive / 3 days office
+  // Scenario 3: Prepaid Daily (Pay as you go)
+  const prepaidDaily = calculatePrepaidDailyCost(actualCommuteDays);
+
+  // Scenario 4: Hybrid Scenarios
   
-  // Avoid NaN if daysInOffice is 0
+  const hybridDriveRatio = hybridDriveDays / daysInOffice; 
   const safeHybridDriveRatio = daysInOffice > 0 ? hybridDriveRatio : 0;
   
-  const annualHybridDriveDays = Math.round(actualCommuteDays * safeHybridDriveRatio);
+  // Days driven in this period
+  const periodHybridDriveDays = Math.round(actualCommuteDays * safeHybridDriveRatio);
+  // Days taking DART in this period
+  const periodHybridDartDays = actualCommuteDays - periodHybridDriveDays;
   
-  // Cost = Annual Pass (Fixed) + Driving Costs (Variable) + Parking (Fixed? Maybe)
-  // Assumption: If you drive regular days (e.g. 2 days a week), you probably still pay the monthly parking.
-  // Unless user sets Parking to 0.
-  const hybridDrivingCosts = calculateDrivingCost(annualHybridDriveDays, monthlyParking > 0); 
-  const hybridDartCosts = calculateDartCost();
+  // Common Driving Costs for both hybrid scenarios
+  const hybridDrivingCosts = calculateDrivingCost(periodHybridDriveDays, monthlyParking > 0); 
 
-  // In hybrid, you pay for the pass AND the variable driving costs
-  const hybridTotal = hybridDrivingCosts.totalCost + hybridDartCosts.totalCost;
+  // Strategy A: Buy Annual Pass + Drive remaining days
+  const hybridPassComponent = calculateAnnualPassCost(); // Assumes you bought the pass regardless of usage
+  const hybridTotal = hybridDrivingCosts.totalCost + hybridPassComponent.totalCost;
 
   const hybrid: CostBreakdown = {
     totalCost: hybridTotal,
@@ -106,8 +134,27 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
       parking: hybridDrivingCosts.breakdown.parking,
       tolls: hybridDrivingCosts.breakdown.tolls,
       maintenance: hybridDrivingCosts.breakdown.maintenance,
-      passCost: hybridDartCosts.breakdown.passCost,
-      taxSavings: hybridDartCosts.breakdown.taxSavings
+      passCost: hybridPassComponent.breakdown.passCost,
+      ticketCost: 0,
+      taxSavings: hybridPassComponent.breakdown.taxSavings
+    },
+    commuteDays: actualCommuteDays
+  };
+
+  // Strategy B: Prepaid Tickets + Drive remaining days
+  const hybridPrepaidComponent = calculatePrepaidDailyCost(periodHybridDartDays);
+  const hybridPrepaidTotal = hybridDrivingCosts.totalCost + hybridPrepaidComponent.totalCost;
+
+  const hybridPrepaid: CostBreakdown = {
+    totalCost: hybridPrepaidTotal,
+    breakdown: {
+      fuel: hybridDrivingCosts.breakdown.fuel,
+      parking: hybridDrivingCosts.breakdown.parking,
+      tolls: hybridDrivingCosts.breakdown.tolls,
+      maintenance: hybridDrivingCosts.breakdown.maintenance,
+      passCost: 0,
+      ticketCost: hybridPrepaidComponent.breakdown.ticketCost,
+      taxSavings: hybridPrepaidComponent.breakdown.taxSavings // Savings from prepaid
     },
     commuteDays: actualCommuteDays
   };
@@ -115,7 +162,11 @@ export const calculateCosts = (inputs: Inputs): ComparisonResult => {
   return {
     drivingOnly,
     dartOnly,
+    prepaidDaily,
     hybrid,
-    actualCommuteDays
+    hybridPrepaid,
+    actualCommuteDays,
+    periodLabel,
+    monthsRemaining
   };
 };

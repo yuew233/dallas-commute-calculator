@@ -3,6 +3,7 @@ import { Inputs } from './types';
 export const DEFAULT_INPUTS: Inputs = {
   daysInOffice: 5,
   oneWayDistance: 20,
+  startMonth: 1, // Default to January
   
   ptoDays: 15,
   holidays: 10,
@@ -14,7 +15,8 @@ export const DEFAULT_INPUTS: Inputs = {
   tollsPerDay: 0,
   maintenancePerMile: 0.09, // AAA average roughly 9-10 cents for maintenance/tires
   
-  annualPassPrice: 960, // Approximate corporate rate, user can edit
+  annualPassPrice: 720, // Updated based on user feedback ($60/mo)
+  dailyTicketPrice: 6.00, // Standard local day pass
   usePreTaxBenefit: true,
   taxRate: 25, // Conservative estimate for combined Fed/State/FICA effectiveness
 
@@ -23,3 +25,7 @@ export const DEFAULT_INPUTS: Inputs = {
 
 export const WEEKS_PER_YEAR = 52;
 export const WORK_DAYS_PER_WEEK = 5;
+export const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June", 
+  "July", "August", "September", "October", "November", "December"
+];

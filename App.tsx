@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Car, 
   Train, 
-  Calculator, 
-  DollarSign, 
-  Fuel, 
-  ParkingCircle, 
   CalendarDays, 
-  Settings2,
   ExternalLink,
-  Info
+  Info,
+  Calendar,
+  Ticket,
+  TrendingDown,
+  AlertCircle
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -19,12 +18,11 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer
 } from 'recharts';
 
 import { Inputs, ComparisonResult } from './types';
-import { DEFAULT_INPUTS } from './constants';
+import { DEFAULT_INPUTS, MONTH_NAMES } from './constants';
 import { calculateCosts } from './services/calculator';
 import { InfoCard } from './components/InfoCard';
 
@@ -40,74 +38,78 @@ const App: React.FC = () => {
 
   const chartData = [
     {
-      name: 'Driving Only',
+      name: 'Driving',
       Fuel: results.drivingOnly.breakdown.fuel,
       Parking: results.drivingOnly.breakdown.parking,
       Tolls: results.drivingOnly.breakdown.tolls,
       Maintenance: results.drivingOnly.breakdown.maintenance,
       Pass: 0,
+      Tickets: 0,
       TaxSavings: 0,
       Total: results.drivingOnly.totalCost
     },
     {
-      name: 'DART Annual Pass',
+      name: 'Annual Pass',
       Fuel: 0,
       Parking: 0,
       Tolls: 0,
       Maintenance: 0,
       Pass: results.dartOnly.breakdown.passCost,
-      TaxSavings: -results.dartOnly.breakdown.taxSavings, // Negative for visualization or handle separately? Let's show Net.
+      Tickets: 0,
+      TaxSavings: -results.dartOnly.breakdown.taxSavings, 
       Total: results.dartOnly.totalCost
     },
     {
-      name: 'Hybrid',
-      Fuel: results.hybrid.breakdown.fuel,
-      Parking: results.hybrid.breakdown.parking,
-      Tolls: results.hybrid.breakdown.tolls,
-      Maintenance: results.hybrid.breakdown.maintenance,
-      Pass: results.hybrid.breakdown.passCost,
-      TaxSavings: -results.hybrid.breakdown.taxSavings,
-      Total: results.hybrid.totalCost
+      name: 'Prepaid Daily',
+      Fuel: 0,
+      Parking: 0,
+      Tolls: 0,
+      Maintenance: 0,
+      Pass: 0,
+      Tickets: results.prepaidDaily.breakdown.ticketCost,
+      TaxSavings: -results.prepaidDaily.breakdown.taxSavings,
+      Total: results.prepaidDaily.totalCost
     }
   ];
 
-  // For the breakdown chart, we want to show Costs as positive bars. 
-  // We can visualize "Tax Savings" as a negative bar or just compare Net Costs.
-  // Let's stick to positive cost components.
   const simpleChartData = chartData.map(item => ({
     name: item.name,
     "Fuel & Maint": Math.round(item.Fuel + item.Maintenance),
     "Parking & Tolls": Math.round(item.Parking + item.Tolls),
-    "DART Pass (Net)": Math.round(item.Pass + item.TaxSavings), // Net cost
+    "DART Cost (Net)": Math.round(item.Pass + item.Tickets + item.TaxSavings), 
   }));
 
-  const annualSavings = results.drivingOnly.totalCost - results.dartOnly.totalCost;
-  const isDartCheaper = annualSavings > 0;
+  // Find cheapest option for comparison tab
+  const costs = [
+    { type: 'Driving', val: results.drivingOnly.totalCost },
+    { type: 'Annual Pass', val: results.dartOnly.totalCost },
+    { type: 'Prepaid Daily', val: results.prepaidDaily.totalCost }
+  ];
+  const cheapest = costs.reduce((prev, curr) => prev.val < curr.val ? prev : curr);
+  const savings = results.drivingOnly.totalCost - cheapest.val;
+
+  // Hybrid comparison logic
+  const hybridIsPassCheaper = results.hybrid.totalCost < results.hybridPrepaid.totalCost;
+  const hybridSavings = Math.abs(results.hybrid.totalCost - results.hybridPrepaid.totalCost);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-12">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded-lg text-white">
-              <Train size={24} />
-            </div>
-            <h1 className="text-xl font-bold text-slate-900">Dallas Commute Calculator</h1>
-          </div>
-          <div className="flex items-center space-x-4 text-sm font-medium text-slate-500">
-             <a href="https://attperks.benefithub.com/api/ResourceProxyV2/FileResource?resourceid=2TJOHCQQUW1ONZ0EU5VRLEHYUK1QDA41SNQYS1SMNOHW9KI" 
-                target="_blank" 
-                rel="noreferrer"
-                className="flex items-center space-x-1 hover:text-blue-600 transition-colors">
-                <span>View DART Rates</span>
-                <ExternalLink size={14} />
-             </a>
-          </div>
-        </div>
-      </header>
+      {/* Banner */}
+      <div className="relative bg-gradient-to-r from-emerald-600 to-blue-600 h-32 overflow-hidden shadow-md">
+         <div className="absolute inset-0 bg-black bg-opacity-10"></div>
+         <div className="absolute -left-10 -bottom-10 text-white opacity-20 transform rotate-12">
+            <Car size={160} />
+         </div>
+         <div className="absolute -right-6 top-2 text-white opacity-20 transform -rotate-12">
+            <Train size={160} />
+         </div>
+         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col justify-center items-center text-center">
+            <h1 className="text-3xl font-bold text-white tracking-tight drop-shadow-sm">Commute Calculator</h1>
+            <p className="text-blue-50 font-medium mt-1">Driving vs. DART Annual Pass vs. Prepaid</p>
+         </div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
@@ -172,7 +174,7 @@ const App: React.FC = () => {
                 
                 <div className="pt-2 border-t border-slate-100">
                   <p className="text-sm text-slate-500">
-                    Total Commutes: <span className="font-semibold text-slate-900">{results.actualCommuteDays} days/year</span>
+                    Commutes ({results.periodLabel}): <span className="font-semibold text-slate-900">{results.actualCommuteDays} days</span>
                   </p>
                 </div>
               </div>
@@ -264,26 +266,71 @@ const App: React.FC = () => {
 
             {/* DART Costs Card */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center space-x-2 mb-4 text-slate-900">
-                <Train size={20} className="text-amber-500" />
-                <h2 className="font-semibold text-lg">DART / Annual Pass</h2>
+              <div className="flex items-center justify-between mb-4 text-slate-900">
+                <div className="flex items-center space-x-2">
+                  <Train size={20} className="text-amber-500" />
+                  <h2 className="font-semibold text-lg">Transit Options</h2>
+                </div>
+                <a href="https://attperks.benefithub.com/api/ResourceProxyV2/FileResource?resourceid=2TJOHCQQUW1ONZ0EU5VRLEHYUK1QDA41SNQYS1SMNOHW9KI" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-700 transition-colors">
+                  <span>View Rates</span>
+                  <ExternalLink size={10} />
+                </a>
               </div>
 
               <div className="space-y-4">
-                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Annual Pass Cost</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-sm text-slate-400">$</span>
-                    <input 
-                      type="number" 
-                      value={inputs.annualPassPrice}
-                      onChange={(e) => handleInputChange('annualPassPrice', parseFloat(e.target.value))}
-                      className="w-full px-3 py-2 pl-6 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                    />
-                  </div>
-                </div>
+                 <div className="bg-amber-50 p-3 rounded-lg border border-amber-100 mb-3">
+                   <label className="block text-xs font-bold text-amber-800 mb-1 flex items-center">
+                     <Calendar size={12} className="mr-1" />
+                     Purchase Start Month
+                   </label>
+                   <select 
+                     value={inputs.startMonth}
+                     onChange={(e) => handleInputChange('startMonth', parseInt(e.target.value))}
+                     className="w-full px-2 py-1.5 border border-amber-200 rounded bg-white text-sm focus:ring-1 focus:ring-amber-500 outline-none cursor-pointer"
+                   >
+                     {MONTH_NAMES.map((month, index) => (
+                       <option key={month} value={index + 1}>{month} ({12 - index} months)</option>
+                     ))}
+                   </select>
+                   <p className="text-xs text-amber-700 mt-1">
+                     Analysis period: {results.periodLabel}
+                   </p>
+                 </div>
 
-                <div className="flex items-center justify-between">
+                 {/* Annual Pass Input */}
+                 <div className="p-3 border border-slate-100 rounded-lg">
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Option 1: Annual Pass</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Full Year Rate</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-sm text-slate-400">$</span>
+                      <input 
+                        type="number" 
+                        value={inputs.annualPassPrice}
+                        onChange={(e) => handleInputChange('annualPassPrice', parseFloat(e.target.value))}
+                        className="w-full px-3 py-2 pl-6 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                 </div>
+
+                 {/* Prepaid Input */}
+                 <div className="p-3 border border-slate-100 rounded-lg">
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Option 2: Prepaid / Daily</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Daily Ticket Price</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-sm text-slate-400">$</span>
+                      <input 
+                        type="number" 
+                        value={inputs.dailyTicketPrice}
+                        onChange={(e) => handleInputChange('dailyTicketPrice', parseFloat(e.target.value))}
+                        className="w-full px-3 py-2 pl-6 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                    </div>
+                 </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                   <label className="text-sm font-medium text-slate-700">Use Pre-tax Payroll?</label>
                   <input 
                     type="checkbox" 
@@ -294,16 +341,16 @@ const App: React.FC = () => {
                 </div>
 
                 {inputs.usePreTaxBenefit && (
-                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-100">
-                    <label className="block text-xs font-medium text-amber-800 mb-1">Marginal Tax Rate (%)</label>
+                  <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                    <label className="block text-xs font-medium text-green-800 mb-1">Marginal Tax Rate (%)</label>
                     <div className="flex items-center space-x-2">
                        <input 
                         type="number" 
                         value={inputs.taxRate}
                         onChange={(e) => handleInputChange('taxRate', parseFloat(e.target.value))}
-                        className="w-20 px-2 py-1 border border-amber-200 rounded text-sm focus:ring-1 focus:ring-amber-500 outline-none"
+                        className="w-20 px-2 py-1 border border-green-200 rounded text-sm focus:ring-1 focus:ring-green-500 outline-none"
                       />
-                      <span className="text-xs text-amber-700">Savings: <span className="font-bold">${results.dartOnly.breakdown.taxSavings.toFixed(0)}/yr</span></span>
+                      <span className="text-xs text-green-700">Savings applied to both options.</span>
                     </div>
                   </div>
                 )}
@@ -316,40 +363,53 @@ const App: React.FC = () => {
           <div className="lg:col-span-8 space-y-6">
             
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <InfoCard 
-                title="Driving Annual Cost" 
+                title={`Driving`} 
                 value={`$${results.drivingOnly.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}`} 
-                subValue={`$${(results.drivingOnly.totalCost / 12).toFixed(0)} / month`}
+                subValue={`~$${(results.drivingOnly.totalCost / results.monthsRemaining).toFixed(0)} / mo`}
                 icon={Car} 
                 colorClass="bg-emerald-600" 
               />
               <InfoCard 
-                title="DART Net Annual Cost" 
+                title={`Annual Pass`} 
                 value={`$${results.dartOnly.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}`} 
-                subValue={inputs.usePreTaxBenefit ? `Includes $${results.dartOnly.breakdown.taxSavings.toFixed(0)} tax savings` : 'No pre-tax deduction'}
+                subValue={`Net (After Tax)`}
                 icon={Train} 
                 colorClass="bg-amber-500"
-                trend="down"
+                trend={results.dartOnly.totalCost < results.drivingOnly.totalCost ? "down" : "neutral"}
+              />
+               <InfoCard 
+                title={`Prepaid Daily`} 
+                value={`$${results.prepaidDaily.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}`} 
+                subValue={`$${inputs.dailyTicketPrice}/day Net`}
+                icon={Ticket} 
+                colorClass="bg-blue-500"
+                trend={results.prepaidDaily.totalCost < results.drivingOnly.totalCost ? "down" : "neutral"}
               />
             </div>
             
              {/* Big Savings Result */}
-             <div className={`rounded-xl shadow-sm border p-6 flex flex-col md:flex-row items-center justify-between ${isDartCheaper ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-transparent' : 'bg-white border-slate-200'}`}>
+             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row items-center justify-between">
                 <div className="mb-4 md:mb-0">
-                  <h3 className={`text-lg font-semibold ${isDartCheaper ? 'text-blue-100' : 'text-slate-500'}`}>
-                    Annual Recommendation
+                  <h3 className="text-lg font-semibold text-slate-500">
+                    Cheapest Option ({results.periodLabel})
                   </h3>
-                  <p className={`text-3xl font-bold mt-1 ${isDartCheaper ? 'text-white' : 'text-slate-900'}`}>
-                    {isDartCheaper ? 'Switch to DART' : 'Driving is Cheaper'}
+                  <p className="text-3xl font-bold mt-1 text-slate-900">
+                    {cheapest.type}
                   </p>
                 </div>
                 <div className="text-center md:text-right">
-                   <p className={`text-sm ${isDartCheaper ? 'text-blue-200' : 'text-slate-500'}`}>Potential Savings</p>
-                   <p className={`text-4xl font-extrabold ${isDartCheaper ? 'text-white' : 'text-emerald-600'}`}>
-                     ${Math.abs(annualSavings).toLocaleString(undefined, {maximumFractionDigits: 0})}
-                     <span className={`text-lg font-normal ml-1 ${isDartCheaper ? 'text-blue-200' : 'text-slate-500'}`}>/ year</span>
-                   </p>
+                   {cheapest.type !== 'Driving' ? (
+                     <>
+                        <p className="text-sm text-slate-500">Total Savings vs Driving</p>
+                        <p className="text-4xl font-extrabold text-emerald-600">
+                          ${Math.abs(savings).toLocaleString(undefined, {maximumFractionDigits: 0})}
+                        </p>
+                     </>
+                   ) : (
+                     <p className="text-lg font-medium text-slate-400">Driving is the cheapest option</p>
+                   )}
                 </div>
              </div>
 
@@ -360,20 +420,20 @@ const App: React.FC = () => {
                     onClick={() => setActiveTab('comparison')}
                     className={`flex-1 py-4 text-sm font-medium text-center transition-colors border-b-2 ${activeTab === 'comparison' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                   >
-                    Cost Breakdown
+                    Cost Comparison
                   </button>
                   <button 
                     onClick={() => setActiveTab('hybrid')}
                     className={`flex-1 py-4 text-sm font-medium text-center transition-colors border-b-2 ${activeTab === 'hybrid' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                   >
-                    Hybrid Scenario
+                    Hybrid Simulator
                   </button>
                </div>
                
                <div className="p-6">
                  {activeTab === 'comparison' ? (
                    <div className="h-[400px]">
-                      <h3 className="text-sm font-semibold text-slate-500 mb-4 text-center">Annual Cost Composition</h3>
+                      <h3 className="text-sm font-semibold text-slate-500 mb-4 text-center">Net Cost Composition ({results.periodLabel})</h3>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={simpleChartData}
@@ -388,19 +448,31 @@ const App: React.FC = () => {
                             formatter={(value: number) => [`$${value.toLocaleString()}`, '']}
                           />
                           <Legend wrapperStyle={{paddingTop: '20px'}} />
-                          <Bar dataKey="Fuel & Maint" stackId="a" fill="#10b981" barSize={60} radius={[0, 0, 4, 4]} />
-                          <Bar dataKey="Parking & Tolls" stackId="a" fill="#059669" barSize={60} />
-                          <Bar dataKey="DART Pass (Net)" stackId="a" fill="#f59e0b" barSize={60} radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Fuel & Maint" stackId="a" fill="#10b981" barSize={50} radius={[0, 0, 4, 4]} />
+                          <Bar dataKey="Parking & Tolls" stackId="a" fill="#059669" barSize={50} />
+                          <Bar dataKey="DART Cost (Net)" stackId="a" fill="#3b82f6" barSize={50} radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                    </div>
                  ) : (
                    <div>
                       <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Hybrid Commute Simulator</h3>
-                        <p className="text-sm text-slate-500 mb-6">
-                          What if you buy the Annual Pass but still drive occasionally (e.g., late nights, rain)?
-                        </p>
+                        <div className="flex items-center justify-between mb-4">
+                           <div>
+                              <h3 className="text-lg font-semibold text-slate-900">Hybrid Commute Simulator</h3>
+                              <p className="text-sm text-slate-500">
+                                Compare <strong>Buying a Pass</strong> vs <strong>Pay-As-You-Go</strong> for mixed schedules.
+                              </p>
+                           </div>
+                           <div className={`px-4 py-2 rounded-lg border ${hybridIsPassCheaper ? 'bg-amber-50 border-amber-100 text-amber-800' : 'bg-blue-50 border-blue-100 text-blue-800'}`}>
+                             <p className="text-xs font-bold uppercase tracking-wide mb-1">Recommendation</p>
+                             <p className="font-bold flex items-center">
+                               {hybridIsPassCheaper ? <Train size={16} className="mr-2"/> : <Ticket size={16} className="mr-2"/>}
+                               {hybridIsPassCheaper ? 'Buy Annual Pass' : 'Pay As You Go'}
+                             </p>
+                             <p className="text-xs mt-1">Saves ${hybridSavings.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                           </div>
+                        </div>
                         
                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                           <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -416,34 +488,73 @@ const App: React.FC = () => {
                             className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-600 mb-2"
                           />
                           <div className="flex justify-between text-sm">
-                             <span className="font-semibold text-amber-600">{inputs.daysInOffice - inputs.hybridDriveDays} days DART</span>
+                             <span className="font-semibold text-blue-600">{inputs.daysInOffice - inputs.hybridDriveDays} days DART</span>
                              <span className="font-semibold text-emerald-600">{inputs.hybridDriveDays} days Drive</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-                            <p className="text-xs text-emerald-700 uppercase tracking-wide font-bold mb-1">Driving Only</p>
-                            <p className="text-2xl font-bold text-slate-900">${results.drivingOnly.totalCost.toLocaleString()}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         {/* Card 1: Annual Pass Strategy */}
+                         <div className={`p-5 rounded-xl border-2 transition-all ${hybridIsPassCheaper ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200 shadow-sm' : 'border-slate-100 bg-white'}`}>
+                            <div className="flex justify-between items-start mb-4">
+                               <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                                  <Train size={24} />
+                               </div>
+                               <div className="text-right">
+                                  <p className="text-xs font-bold text-slate-400 uppercase">Strategy A</p>
+                                  <p className="font-bold text-slate-800">Annual Pass</p>
+                               </div>
+                            </div>
+                            <div className="space-y-2 mb-4">
+                               <div className="flex justify-between text-sm">
+                                  <span className="text-slate-600">Fixed Pass Cost</span>
+                                  <span className="font-medium text-slate-900">${(results.hybrid.breakdown.passCost - results.hybrid.breakdown.taxSavings).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                               </div>
+                               <div className="flex justify-between text-sm">
+                                  <span className="text-slate-600">Driving ({inputs.hybridDriveDays} days)</span>
+                                  <span className="font-medium text-slate-900">+ ${(results.hybrid.breakdown.fuel + results.hybrid.breakdown.parking + results.hybrid.breakdown.tolls + results.hybrid.breakdown.maintenance).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                               </div>
+                            </div>
+                            <div className="pt-3 border-t border-amber-200/50 flex justify-between items-end">
+                               <span className="text-sm font-medium text-amber-800">Total Cost</span>
+                               <span className="text-2xl font-bold text-slate-900">${results.hybrid.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            </div>
                          </div>
-                         <div className="p-4 rounded-lg bg-purple-50 border border-purple-100 ring-2 ring-purple-200">
-                            <p className="text-xs text-purple-700 uppercase tracking-wide font-bold mb-1">Hybrid Cost</p>
-                            <p className="text-2xl font-bold text-slate-900">${results.hybrid.totalCost.toLocaleString()}</p>
-                            <p className="text-xs text-slate-500 mt-1">Pass + Fuel/Parking for {inputs.hybridDriveDays * 52} days</p>
-                         </div>
-                         <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
-                            <p className="text-xs text-amber-700 uppercase tracking-wide font-bold mb-1">DART Only</p>
-                            <p className="text-2xl font-bold text-slate-900">${results.dartOnly.totalCost.toLocaleString()}</p>
+
+                         {/* Card 2: Prepaid Strategy */}
+                         <div className={`p-5 rounded-xl border-2 transition-all ${!hybridIsPassCheaper ? 'border-blue-400 bg-blue-50 ring-2 ring-blue-200 shadow-sm' : 'border-slate-100 bg-white'}`}>
+                            <div className="flex justify-between items-start mb-4">
+                               <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                                  <Ticket size={24} />
+                               </div>
+                               <div className="text-right">
+                                  <p className="text-xs font-bold text-slate-400 uppercase">Strategy B</p>
+                                  <p className="font-bold text-slate-800">Pay As You Go</p>
+                               </div>
+                            </div>
+                            <div className="space-y-2 mb-4">
+                               <div className="flex justify-between text-sm">
+                                  <span className="text-slate-600">Tickets ({inputs.daysInOffice - inputs.hybridDriveDays} days/wk)</span>
+                                  <span className="font-medium text-slate-900">${(results.hybridPrepaid.breakdown.ticketCost - results.hybridPrepaid.breakdown.taxSavings).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                               </div>
+                               <div className="flex justify-between text-sm">
+                                  <span className="text-slate-600">Driving ({inputs.hybridDriveDays} days)</span>
+                                  <span className="font-medium text-slate-900">+ ${(results.hybridPrepaid.breakdown.fuel + results.hybridPrepaid.breakdown.parking + results.hybridPrepaid.breakdown.tolls + results.hybridPrepaid.breakdown.maintenance).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                               </div>
+                            </div>
+                            <div className="pt-3 border-t border-blue-200/50 flex justify-between items-end">
+                               <span className="text-sm font-medium text-blue-800">Total Cost</span>
+                               <span className="text-2xl font-bold text-slate-900">${results.hybridPrepaid.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            </div>
                          </div>
                       </div>
-                      
-                      <div className="mt-6 text-center text-sm text-slate-500">
-                        {results.hybrid.totalCost < results.drivingOnly.totalCost ? (
-                          <span className="text-emerald-600 font-medium">Hybrid approach saves ${Math.round(results.drivingOnly.totalCost - results.hybrid.totalCost).toLocaleString()} vs Driving daily.</span>
-                        ) : (
-                          <span className="text-rose-600 font-medium">Hybrid is more expensive than just driving if you drive {inputs.hybridDriveDays} days/week while holding a pass.</span>
-                        )}
+
+                      <div className="mt-6 flex items-start space-x-3 text-sm text-slate-500 bg-white p-4 rounded-lg border border-slate-200">
+                         <Info className="flex-shrink-0 text-slate-400 mt-0.5" size={16} />
+                         <p>
+                           <strong>Note:</strong> Strategy A assumes you pay the full Annual Pass price regardless of how few days you use it. Strategy B assumes you only pay for tickets on the days you actually ride DART.
+                         </p>
                       </div>
                    </div>
                  )}
@@ -453,16 +564,16 @@ const App: React.FC = () => {
             {/* Detailed Table */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                <div className="px-6 py-4 border-b border-slate-200">
-                  <h3 className="font-semibold text-slate-900">Detailed Breakdown</h3>
+                  <h3 className="font-semibold text-slate-900">Detailed Breakdown ({results.periodLabel})</h3>
                </div>
                <div className="overflow-x-auto">
                  <table className="w-full text-sm text-left">
                    <thead className="bg-slate-50 text-slate-500 font-medium">
                      <tr>
                        <th className="px-6 py-3">Expense Category</th>
-                       <th className="px-6 py-3">Driving Only</th>
-                       <th className="px-6 py-3">DART Annual Pass</th>
-                       <th className="px-6 py-3">Hybrid ({inputs.hybridDriveDays}d Drive)</th>
+                       <th className="px-6 py-3">Driving</th>
+                       <th className="px-6 py-3">Annual Pass</th>
+                       <th className="px-6 py-3">Prepaid Daily</th>
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100">
@@ -470,37 +581,37 @@ const App: React.FC = () => {
                        <td className="px-6 py-3 font-medium text-slate-700">Fuel & Charging</td>
                        <td className="px-6 py-3">${results.drivingOnly.breakdown.fuel.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                        <td className="px-6 py-3">-</td>
-                       <td className="px-6 py-3">${results.hybrid.breakdown.fuel.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-3">-</td>
                      </tr>
                      <tr>
                        <td className="px-6 py-3 font-medium text-slate-700">Parking & Tolls</td>
                        <td className="px-6 py-3">${(results.drivingOnly.breakdown.parking + results.drivingOnly.breakdown.tolls).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                        <td className="px-6 py-3">-</td>
-                       <td className="px-6 py-3">${(results.hybrid.breakdown.parking + results.hybrid.breakdown.tolls).toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-3">-</td>
                      </tr>
                       <tr>
-                       <td className="px-6 py-3 font-medium text-slate-700">Maintenance (Tires/Oil)</td>
+                       <td className="px-6 py-3 font-medium text-slate-700">Maintenance</td>
                        <td className="px-6 py-3">${results.drivingOnly.breakdown.maintenance.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                        <td className="px-6 py-3">-</td>
-                       <td className="px-6 py-3">${results.hybrid.breakdown.maintenance.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-3">-</td>
                      </tr>
                      <tr>
-                       <td className="px-6 py-3 font-medium text-slate-700">DART Pass Base Cost</td>
+                       <td className="px-6 py-3 font-medium text-slate-700">DART Fares (Pre-tax)</td>
                        <td className="px-6 py-3">-</td>
                        <td className="px-6 py-3">${results.dartOnly.breakdown.passCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                       <td className="px-6 py-3">${results.dartOnly.breakdown.passCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-3">${results.prepaidDaily.breakdown.ticketCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                      </tr>
                      <tr className="bg-emerald-50 text-emerald-700">
-                       <td className="px-6 py-3 font-medium">Pre-tax Savings</td>
+                       <td className="px-6 py-3 font-medium">Tax Savings</td>
                        <td className="px-6 py-3">-</td>
                        <td className="px-6 py-3">-${results.dartOnly.breakdown.taxSavings.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                       <td className="px-6 py-3">-${results.dartOnly.breakdown.taxSavings.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-3">-${results.prepaidDaily.breakdown.taxSavings.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                      </tr>
                      <tr className="bg-slate-50 font-bold text-slate-900">
-                       <td className="px-6 py-4">Total Annual Cost</td>
+                       <td className="px-6 py-4">Total Net Cost</td>
                        <td className="px-6 py-4">${results.drivingOnly.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                        <td className="px-6 py-4">${results.dartOnly.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
-                       <td className="px-6 py-4">${results.hybrid.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                       <td className="px-6 py-4">${results.prepaidDaily.totalCost.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
                      </tr>
                    </tbody>
                  </table>

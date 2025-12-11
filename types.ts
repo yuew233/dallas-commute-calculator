@@ -2,8 +2,9 @@ export interface Inputs {
   // Commute Basics
   daysInOffice: number; // Days per week
   oneWayDistance: number; // Miles
+  startMonth: number; // 1-12, Month of purchase/start
   
-  // Time Off
+  // Time Off (Annual)
   ptoDays: number;
   holidays: number;
   sickDays: number;
@@ -16,7 +17,8 @@ export interface Inputs {
   maintenancePerMile: number; // $ per mile (tires, oil, wear)
   
   // DART Costs
-  annualPassPrice: number; // $ per year
+  annualPassPrice: number; // $ per FULL year (Reference Rate)
+  dailyTicketPrice: number; // $ per day (e.g. 6)
   usePreTaxBenefit: boolean;
   taxRate: number; // Percentage (marginal tax rate for savings)
 
@@ -31,7 +33,8 @@ export interface CostBreakdown {
     parking: number;
     tolls: number;
     maintenance: number;
-    passCost: number;
+    passCost: number; // Used for Annual Pass
+    ticketCost: number; // Used for Daily Tickets
     taxSavings: number;
   };
   commuteDays: number;
@@ -40,6 +43,10 @@ export interface CostBreakdown {
 export interface ComparisonResult {
   drivingOnly: CostBreakdown;
   dartOnly: CostBreakdown;
-  hybrid: CostBreakdown;
+  prepaidDaily: CostBreakdown;
+  hybrid: CostBreakdown;        // Strategy A: Annual Pass + Driving
+  hybridPrepaid: CostBreakdown; // Strategy B: Prepaid Tickets + Driving
   actualCommuteDays: number;
+  periodLabel: string;
+  monthsRemaining: number;
 }
