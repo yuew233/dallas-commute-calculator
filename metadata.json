@@ -1,0 +1,5 @@
+{
+  "name": "Dallas Commute Calculator",
+  "description": "A cost comparison tool for Dallas commuters to analyze the financial impact of Driving vs. DART Annual Pass, including pre-tax benefits and hybrid schedules.",
+  "requestFramePermissions": []
+}
